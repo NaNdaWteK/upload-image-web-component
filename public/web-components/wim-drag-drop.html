@@ -1,0 +1,179 @@
+<link rel="import" href="../vendor/polymer/polymer.html">
+
+<dom-module id="wim-drag-drop" >
+    <template>
+        <style type="text/css">
+            section { width: 40%; display: block; margin: 1em auto; }
+            .holder { position: relative; border: 7px dashed #ccc; width: 100%; min-height: 300px; margin: 5px auto; background-image: url('../styles/images/pattern.png');}
+            .holder p { font-size: 14px; }
+            .holder.status { background-image: url('../styles/images/status.gif'); background-repeat: no-repeat;}
+            progress { width: 101.5%; height: 28px; }
+            .progress-container { position: relative; height: 24px; }
+            .progress-container .progress-bar { position: absolute; top:0; }
+            .progress-container .progress-text { position: absolute; right:5px; top: 6px; text-align: right; }
+            .fail { color: red; }
+            .hidden { display: none !important;}
+        </style>
+        <section>
+            <div class="progress-container">
+                <progress class="progress-bar" min="0" max="100" value="0"></progress>
+                <div class="progress-text">0%</div>
+            </div>
+            <p class="filereader">File API & FileReader API not supported</p>
+            <p class="formdata">XHR2's FormData is not supported</p>
+            <p class="progress">XHR2's upload progress isn't supported</p>
+            <div class="holder"></div>
+            <div class="upload"><label><br><input class="file" name="file" type="file"></label></div>
+        </section>
+    </template>
+
+    <script>
+
+        Polymer({
+
+            is: 'wim-drag-drop',
+
+            ready: function(){
+                this.holder = document.getElementsByClassName('holder')[0];
+                this.progress = document.getElementsByClassName('progress-bar')[0];
+                this.progressText = document.getElementsByClassName('progress-text')[0];
+                this.fileupload = document.getElementsByClassName('upload')[0];
+                this.canUse();
+                this.addActions();
+            },
+
+            canUse: function() {
+                "filereader formdata progress".split(' ').forEach(function (api) {
+                    var validate = this.validate();
+                    var support = this.support();
+                    if(validate[api] === false){
+                        support[api].classList.add('fail');
+                    }else{
+                        support[api].classList.add('hidden');
+                    }
+                }.bind(this));
+            },
+
+            uploadFiles: function(files) {
+                if (this.validate().formdata){
+                    var formData = new FormData();
+                    for (var i = 0; i < files.length; i++) {
+                        formData.append('file', files[i]);
+                    }
+                    this.doRequest(formData);
+                }
+            },
+
+            doRequest: function(formData) {
+                this.holder.classList.add('status');
+
+                var request = new XMLHttpRequest();
+                var url = 'api/add/images';
+                request.open('POST', url);
+                request.onload = function() {
+                    if (request.status === 200) {
+                        console.log(request)
+                        this.progress.value = 100;
+                        this.progressText.textContent = '100%';
+                        this.holder.classList.remove('status');
+                        this.previewFile(formData.get('file'));
+                    }
+                }.bind(this);
+                request.send(formData);
+
+                if (this.validate().progress) {
+                    request.upload.onprogress = function (event) {
+                        if (event.lengthComputable) {
+                            var complete = (event.loaded / event.total * 100 | 0);
+                            this.progress.value = complete;
+                            this.progressText.textContent = complete +'%';
+                        }
+                    }.bind(this);
+                }
+            },
+
+            addActions: function() {
+                if(this.validate().dnd){
+                    this.dropUpload();
+                }
+                this.filesUpload();
+            },
+
+            previewFile: function(file) {
+                if(this.acceptTypes()[file.type] === true){
+                    if (this.validate().filereader === true) {
+                        this.showPreviewUploadedFile(file);
+                    }else{
+                        this.showInfoUploadedFile(file);
+                    }
+                }
+            },
+
+            showPreviewUploadedFile: function(file) {
+                var reader  = new FileReader();
+                reader.onload = function (event) {
+                      this.addImage(event);
+                }.bind(this);
+                reader.readAsDataURL(file);
+            },
+
+            showInfoUploadedFile: function(file) {
+                this.holder.innerHTML += '<p>Uploaded ' + file.name + ' ' + (file.size ? (file.size/1024|0) + 'K' : '');
+                console.log(file);
+            },
+
+            addImage: function(event) {
+                var image = new Image();
+                image.src = event.target.result;
+                image.style.display = "block";
+                image.style.width = "100%";
+                image.style.margin = "0 auto";
+                this.holder.appendChild(image);
+            },
+
+            dropUpload: function() {
+                this.holder.ondragover = function () { return false; };
+                this.holder.ondragend = function () { return false; };
+                this.holder.ondrop = function (event) {
+                    event.preventDefault();
+                    this.uploadFiles(event.dataTransfer.files);
+                }.bind(this);
+            },
+
+            filesUpload: function() {
+                this.fileupload.querySelector('input').onchange = function (event) {
+                    this.uploadFiles(event.target.files);
+                }.bind(this);
+            },
+
+            validate: function() {
+                var test = {
+                    filereader : typeof FileReader != 'undefined',
+                    dnd : 'draggable' in document.createElement('span'),
+                    formdata : !!window.FormData,
+                    progress : "upload" in new XMLHttpRequest
+                };
+                return test;
+            },
+
+            support: function() {
+                var support = {
+                    filereader: document.getElementsByClassName('filereader')[0],
+                    formdata: document.getElementsByClassName('formdata')[0],
+                    progress: document.getElementsByClassName('progress')[0]
+                };
+                return support;
+            },
+
+            acceptTypes: function()  {
+                var acceptedTypes = {
+                    'image/png': true,
+                    'image/jpeg': true,
+                    'image/gif': true
+                };
+                return acceptedTypes;
+            }
+
+        });
+    </script>
+</dom-module>
